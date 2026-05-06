@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+*.log
+.env*
+!.env.example
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.vscode/
+.idea/
+*.tsbuildinfo
+.turbo/
+coverage/
+.next/
+out/
+
+# CLI harness working dirs
+.claude/
+.opencode/

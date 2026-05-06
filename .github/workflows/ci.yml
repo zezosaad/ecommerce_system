@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, '001-*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Dashboard a11y tests
+        run: pnpm --filter @vendorhub/dashboard test:a11y
+
+      - name: Website a11y tests
+        run: pnpm --filter @vendorhub/website test:a11y

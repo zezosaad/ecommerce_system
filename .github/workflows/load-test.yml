@@ -1,0 +1,18 @@
+name: Load Test
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  pull_request:
+
+jobs:
+  k6:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run k6 baseline
+        uses: grafana/run-k6-action@v1
+        with:
+          path: apps/backend/test/load/baseline.js
+        env:
+          BASE_URL: ${{ secrets.STAGING_BASE_URL }}

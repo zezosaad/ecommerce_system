@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    env_file: ../apps/backend/.env
+    ports:
+      - '3000:3000'
+    volumes:
+      - ../apps/backend/src:/app/src
+    command: pnpm --filter @vendorhub/backend dev
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/dashboard.Dockerfile
+    env_file: ../apps/dashboard/.env
+    ports:
+      - '3001:3001'
+    volumes:
+      - ../apps/dashboard/src:/app/src
+    command: pnpm --filter @vendorhub/dashboard dev
+
+  website:
+    build:
+      context: ..
+      dockerfile: docker/website.Dockerfile
+    env_file: ../apps/website/.env
+    ports:
+      - '3002:3002'
+    volumes:
+      - ../apps/website/src:/app/src
+    command: pnpm --filter @vendorhub/website dev
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - '8080:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - dashboard
+      - website
