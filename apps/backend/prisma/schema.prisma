@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  directUrl         = env("DIRECT_URL")
+}
+
+model User {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supabaseUserId  String            @unique(map: "users_supabase_user_id_key") @map("supabase_user_id") @db.Uuid
+  email           String
+  displayName     String?           @map("display_name")
+  avatarUrl       String?           @map("avatar_url")
+  locale          String            @default("en")
+  phone           String?
+  isActive        Boolean           @default(true) @map("is_active")
+  lastSeenAt      DateTime?         @map("last_seen_at") @db.Timestamptz
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz
+
+  userRoles       UserRole[]       @relation("UserRolesUser")
+  auditLogs       AuditLog[]       @relation("AuditActor")
+  grantedByRoles  UserRole[]       @relation("GrantedBy")
+
+  @@unique([email], map: "users_email_active_key")
+  @@map("users")
+}
+
+model Role {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String              @unique
+  label       Json
+  description Json?
+  isSystem    Boolean             @default(true) @map("is_system")
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String    @unique
+  description Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Restrict)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  roleId          String    @map("role_id") @db.Uuid
+  merchantId      String?   @map("merchant_id") @db.Uuid
+  storeId         String?   @map("store_id") @db.Uuid
+  grantedByUserId String?   @map("granted_by_user_id") @db.Uuid
+  grantedAt       DateTime  @default(now()) @map("granted_at") @db.Timestamptz
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user       User  @relation("UserRolesUser", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  grantedBy  User? @relation("GrantedBy", fields: [grantedByUserId], references: [id])
+
+  @@unique([userId, roleId, merchantId, storeId], map: "user_roles_active_unique")
+  @@index([merchantId], map: "user_roles_merchant_id_idx")
+  @@index([userId], map: "user_roles_user_id_idx")
+  @@map("user_roles")
+}
+
+model AuditLog {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  occurredAt      DateTime  @default(now()) @map("occurred_at") @db.Timestamptz
+  actorUserId     String?   @map("actor_user_id") @db.Uuid
+  actorRoleCodes  String[]  @default([]) @map("actor_role_codes")
+  actionCode      String    @map("action_code")
+  targetType      String?   @map("target_type")
+  targetId        String?   @map("target_id")
+  merchantId      String?   @map("merchant_id") @db.Uuid
+  storeId         String?   @map("store_id") @db.Uuid
+  correlationId   String    @map("correlation_id")
+  ipAddress       String?   @map("ip_address") @db.Inet
+  userAgent       String?   @map("user_agent")
+  before          Json?
+  after           Json?
+  metadata        Json?
+  severity        String    @default("info")
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([occurredAt(sort: Desc)], map: "audit_logs_occurred_at_idx")
+  @@index([actorUserId, occurredAt(sort: Desc)], map: "audit_logs_actor_occurred_at_idx")
+  @@index([merchantId, occurredAt(sort: Desc)], map: "audit_logs_merchant_occurred_at_idx")
+  @@index([targetType, targetId], map: "audit_logs_target_idx")
+  @@index([actionCode], map: "audit_logs_action_code_idx")
+  @@map("audit_logs")
+}
+
+model Setting {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  key         String
+  merchantId  String?   @map("merchant_id") @db.Uuid
+  value       Json
+  isSecret    Boolean   @default(false) @map("is_secret")
+  description Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+
+  @@unique([key, merchantId], map: "settings_key_merchant_unique")
+  @@index([merchantId], map: "settings_merchant_id_idx")
+  @@map("settings")
+}
+
+model Currency {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code          String   @unique
+  name          Json
+  symbol        String
+  decimalDigits Int      @default(2) @map("decimal_digits") @db.SmallInt
+  isDefault     Boolean  @default(false) @map("is_default")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  fromExchangeRates ExchangeRate[] @relation("FromCurrency")
+  toExchangeRates   ExchangeRate[] @relation("ToCurrency")
+  ledgerAccounts    LedgerAccount[]
+
+  @@map("currencies")
+}
+
+model ExchangeRate {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromCurrencyCode String  @map("from_currency_code")
+  toCurrencyCode   String  @map("to_currency_code")
+  rate             Decimal @db.Decimal(20, 10)
+  source          String
+  effectiveAt     DateTime @map("effective_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  fromCurrency Currency @relation("FromCurrency", fields: [fromCurrencyCode], references: [code])
+  toCurrency   Currency @relation("ToCurrency", fields: [toCurrencyCode], references: [code])
+
+  @@index([fromCurrencyCode, toCurrencyCode, effectiveAt(sort: Desc)], map: "exchange_rates_currency_pair_idx")
+  @@map("exchange_rates")
+}
+
+model TaxClass {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique
+  name        Json
+  description Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  countryTaxRules CountryTaxRule[]
+
+  @@map("tax_classes")
+}
+
+model CountryTaxRule {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  countryCode   String   @map("country_code")
+  taxClassId    String   @map("tax_class_id") @db.Uuid
+  ratePercent   Decimal @map("rate_percent") @db.Decimal(6, 3)
+  isInclusive   Boolean  @default(false) @map("is_inclusive")
+  effectiveFrom DateTime @map("effective_from") @db.Timestamptz
+  effectiveTo   DateTime? @map("effective_to") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  taxClass TaxClass @relation(fields: [taxClassId], references: [id])
+
+  @@unique([countryCode, taxClassId, effectiveFrom], map: "country_tax_rules_unique")
+  @@map("country_tax_rules")
+}
+
+model LedgerAccount {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code             String   @unique
+  name             Json
+  type             String
+  ownerKind        String   @map("owner_kind")
+  ownerMerchantId  String?  @map("owner_merchant_id") @db.Uuid
+  currencyCode     String   @map("currency_code")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  currency     Currency        @relation(fields: [currencyCode], references: [code])
+  ledgerEntries LedgerEntry[]
+
+  @@map("ledger_accounts")
+}
+
+model LedgerEntry {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  transactionId String   @map("transaction_id") @db.Uuid
+  accountId     String   @map("account_id") @db.Uuid
+  direction     String
+  amount        Decimal @db.Decimal(20, 4)
+  currencyCode  String   @map("currency_code")
+  description   String?
+  correlationId String   @map("correlation_id")
+  metadata      Json?
+  occurredAt    DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  account LedgerAccount @relation(fields: [accountId], references: [id])
+
+  @@index([transactionId], map: "ledger_entries_transaction_id_idx")
+  @@index([accountId, occurredAt(sort: Desc)], map: "ledger_entries_account_occurred_at_idx")
+  @@index([occurredAt(sort: Desc)], map: "ledger_entries_occurred_at_idx")
+  @@map("ledger_entries")
+}
+
+model IdempotencyRecord {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorUserId     String?  @map("actor_user_id") @db.Uuid
+  route           String
+  idempotencyKey  String   @map("idempotency_key")
+  bodyHash        String   @map("body_hash")
+  responseStatus  Int      @map("response_status")
+  responseHeaders Json     @map("response_headers")
+  responseBody    Json     @map("response_body")
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([actorUserId, route, idempotencyKey], map: "idempotency_records_unique")
+  @@index([expiresAt], map: "idempotency_records_expires_at_idx")
+  @@map("idempotency_records")
+}

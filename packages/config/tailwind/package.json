@@ -1,0 +1,7 @@
+{
+  "name": "@vendorhub/config-tailwind",
+  "version": "0.1.0",
+  "private": true,
+  "main": "preset.cjs",
+  "files": ["preset.cjs"]
+}

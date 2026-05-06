@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    env_file: ../apps/backend/.env
+    expose:
+      - '3000'
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/api/v1/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/dashboard.Dockerfile
+    restart: unless-stopped
+    env_file: ../apps/dashboard/.env
+    expose:
+      - '3001'
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  website:
+    build:
+      context: ..
+      dockerfile: docker/website.Dockerfile
+    restart: unless-stopped
+    env_file: ../apps/website/.env
+    expose:
+      - '3002'
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - '443:443'
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+      - dashboard
+      - website
+
+  # Meilisearch - uncomment when search feature is implemented
+  # meilisearch:
+  #   image: getmeili/meilisearch:v1.7
+  #   restart: unless-stopped
+  #   env_file: ./meilisearch.env
+  #   volumes:
+  #     - meilisearch_data:/data.ms
+  #   expose:
+  #     - '7700'
+
+  # Redis - uncomment when caching/queues feature is implemented
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   expose:
+  #     - '6379'
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   meilisearch_data:
+#   redis_data:

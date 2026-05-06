@@ -1,0 +1,27 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "empty": "No data found",
+    "forbidden": "You don't have permission to view this page",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "welcome": "Welcome to VendorHub",
+    "storeNotFound": "Store Not Found",
+    "locale": {
+      "en": "English",
+      "ar": "العربية"
+    }
+  },
+  "health": {
+    "title": "System Health",
+    "status": {
+      "ok": "All systems operational",
+      "degraded": "Some systems are experiencing issues",
+      "unhealthy": "System is currently unavailable"
+    }
+  }
+}

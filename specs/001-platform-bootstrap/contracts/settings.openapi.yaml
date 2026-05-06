@@ -1,0 +1,170 @@
+openapi: 3.0.3
+info:
+  title: VendorHub Settings API
+  version: 0.1.0
+  description: |
+    Read-only foundation endpoints for platform and merchant settings.
+    Demonstrates @Permissions(...) gating, audit logging, pagination,
+    and the standard envelopes. Mutation endpoints arrive in feature
+    002 (audit-logs-and-settings).
+servers:
+  - url: https://api.example.com
+  - url: http://localhost:3000
+paths:
+  /api/v1/settings:
+    get:
+      summary: List settings (scoped to caller)
+      operationId: listSettings
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: scope
+          schema:
+            type: string
+            enum: [global, merchant]
+          description: Filter to a single scope
+        - in: query
+          name: merchant_id
+          schema: { type: string, format: uuid }
+          description: Required if scope=merchant and caller is Super Admin acting cross-tenant.
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - in: query
+          name: sort
+          schema: { type: string, default: "key" }
+          description: "Sort field with optional leading '-'. e.g. -updated_at"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingsListEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/v1/settings/{key}:
+    get:
+      summary: Read a single setting
+      operationId: getSetting
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+        - in: query
+          name: merchant_id
+          schema: { type: string, format: uuid }
+          description: Optional; required for per-merchant settings if caller is Super Admin acting cross-tenant.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SettingEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Setting not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or expired token.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: Permission denied or tenant isolation violation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    Translatable:
+      type: object
+      required: [ar, en]
+      properties:
+        ar: { type: string }
+        en: { type: string }
+    Meta:
+      type: object
+      required: [request_id, served_at, version]
+      properties:
+        request_id: { type: string }
+        served_at: { type: string, format: date-time }
+        version: { type: string }
+    Pagination:
+      type: object
+      required: [page, page_size, total, total_pages]
+      properties:
+        page: { type: integer }
+        page_size: { type: integer }
+        total: { type: integer }
+        total_pages: { type: integer }
+    Setting:
+      type: object
+      required: [id, key, scope, value, is_secret, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string }
+        scope:
+          type: string
+          enum: [global, merchant]
+        merchant_id:
+          type: string
+          format: uuid
+          nullable: true
+        value:
+          description: "Shape depends on the setting; secrets are returned redacted."
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: string
+            - type: number
+            - type: boolean
+        is_secret: { type: boolean }
+        description:
+          $ref: '#/components/schemas/Translatable'
+          nullable: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SettingEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/Setting' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    SettingsListEnvelope:
+      type: object
+      required: [data, pagination, meta]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/Setting' }
+        pagination: { $ref: '#/components/schemas/Pagination' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error: { $ref: '#/components/schemas/Error' }
+        meta: { $ref: '#/components/schemas/Meta' }

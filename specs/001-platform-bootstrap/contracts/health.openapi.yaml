@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: VendorHub Health API
+  version: 0.1.0
+  description: |
+    Foundation health endpoint. Returns overall service health plus
+    the status of each downstream dependency. Always public — no auth
+    required.
+servers:
+  - url: https://api.example.com
+    description: Production
+  - url: http://localhost:3000
+    description: Local development
+paths:
+  /api/v1/health:
+    get:
+      summary: Service health
+      operationId: getHealth
+      security: []   # public
+      responses:
+        '200':
+          description: Service is healthy or degraded.
+          headers:
+            x-request-id:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthSuccessEnvelope'
+        '503':
+          description: Service is unhealthy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthErrorEnvelope'
+components:
+  schemas:
+    Meta:
+      type: object
+      required: [request_id, served_at, version]
+      properties:
+        request_id: { type: string }
+        served_at: { type: string, format: date-time }
+        version: { type: string, description: "Service version: semver+sha" }
+    DependencyStatus:
+      type: string
+      enum: [healthy, degraded, unhealthy, unknown]
+    HealthData:
+      type: object
+      required: [status, version, dependencies]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unhealthy]
+        version: { type: string }
+        uptime_seconds: { type: integer }
+        dependencies:
+          type: object
+          required: [db, auth, storage]
+          properties:
+            db: { $ref: '#/components/schemas/DependencyStatus' }
+            auth: { $ref: '#/components/schemas/DependencyStatus' }
+            storage: { $ref: '#/components/schemas/DependencyStatus' }
+            search:
+              $ref: '#/components/schemas/DependencyStatus'
+              description: "unknown in Phase 0; wired in Phase 2"
+            cache:
+              $ref: '#/components/schemas/DependencyStatus'
+              description: "unknown in Phase 0; wired in Phase 4/5"
+    HealthSuccessEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { $ref: '#/components/schemas/HealthData' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+    HealthErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error: { $ref: '#/components/schemas/Error' }
+        meta: { $ref: '#/components/schemas/Meta' }
