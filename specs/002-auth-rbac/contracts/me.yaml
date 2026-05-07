@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: Self-Introspection
+  version: 1.0.0
+  description: |
+    Read-only endpoints letting an authenticated client introspect just one
+    facet of the identity envelope without re-fetching the whole `/auth/me`
+    payload. All require a valid JWT and an active profile.
+
+paths:
+  /api/v1/me/permissions:
+    get:
+      operationId: getMyPermissions
+      summary: Return the caller's effective permission keys.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Me]
+      x-rate-limit: { bucket: me-read, scope: per-user, limit: 30/min }
+      responses:
+        '200':
+          description: Effective permissions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [permissions, isSuperAdmin]
+                        properties:
+                          permissions:
+                            type: array
+                            items: { type: string }
+                          isSuperAdmin: { type: boolean }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/me/roles:
+    get:
+      operationId: getMyRoles
+      summary: Return the caller's role assignments.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Me]
+      x-rate-limit: { bucket: me-read, scope: per-user, limit: 30/min }
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: Roles list.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '_shared.yaml#/components/schemas/RoleDto'
+                            - type: object
+                              properties:
+                                merchantId: { type: string, format: uuid, nullable: true }
+                                storeId: { type: string, format: uuid, nullable: true }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/me/access-scope:
+    get:
+      operationId: getMyAccessScope
+      summary: Return the caller's denormalized access scope (platform/merchant/store).
+      security: [{ SupabaseJWT: [] }]
+      tags: [Me]
+      x-rate-limit: { bucket: me-read, scope: per-user, limit: 30/min }
+      responses:
+        '200':
+          description: Access scope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '_shared.yaml#/components/schemas/AccessScopeDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }

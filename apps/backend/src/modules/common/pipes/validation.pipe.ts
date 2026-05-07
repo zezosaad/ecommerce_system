@@ -17,7 +17,12 @@ export class ValidationPipe implements PipeTransform<unknown> {
     }
 
     const object = plainToInstance(metatype as new (...args: unknown[]) => unknown, value);
-    const errors = await validate(object as Record<string, unknown>);
+    // whitelist:true strips properties that aren't decorated on the DTO,
+    // preventing clients from smuggling extras like `status` into
+    // self-edit endpoints.
+    const errors = await validate(object as Record<string, unknown>, {
+      whitelist: true,
+    });
 
     if (errors.length > 0) {
       const fields = this.flattenErrors(errors);

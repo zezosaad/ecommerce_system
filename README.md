@@ -4,12 +4,15 @@ Multi-vendor e-commerce platform.
 
 ## Quick Links
 
+- [Constitution](.specify/memory/constitution.md)
 - [Local Quickstart](docs/quickstart-local.md)
 - [Docker Quickstart](docs/quickstart-docker.md)
 - [Architecture Overview](docs/architecture-overview.md)
 - [How to Add a Module](docs/how-to-add-a-module.md)
 - [Deployment Runbook](docs/deployment-runbook.md)
 - [Folder Structure](docs/folder-structure.md)
+- [Bootstrap and Build Sequencing](docs/bootstrap-and-build-sequencing.md)
+- [Phased Delivery Plan](docs/phased-delivery-plan.md)
 - [API Docs](http://localhost:3000/api/docs) (when running locally)
 
 ## Monorepo Structure

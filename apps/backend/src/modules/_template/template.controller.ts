@@ -13,7 +13,7 @@ import { buildMetaFromRequest } from '../common/envelopes/meta';
 import { PaginationDto } from '../common/dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthContextService } from '../auth/auth-context.service';
-import { StoreScope } from '../auth/decorators/store-scope.decorator';
+import { GetTenantContext } from '../auth/decorators/store-scope.decorator';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { TemplateService } from './template.service';
 
@@ -34,7 +34,7 @@ export class ExampleController {
   @ApiOperation({ summary: 'List examples' })
   async list(
     @Query() pagination: PaginationDto,
-    @StoreScope() scope: { merchantId: string | null; storeId: string | null; isSuperAdmin: boolean },
+    @GetTenantContext() scope: { merchantId: string | null; storeId: string | null; isSuperAdmin: boolean },
     @Req() req: Request,
   ) {
     const page = pagination.page ?? 1;

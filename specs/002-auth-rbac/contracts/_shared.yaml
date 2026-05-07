@@ -1,0 +1,237 @@
+openapi: 3.0.3
+info:
+  title: Phase 2 Shared Components
+  version: 1.0.0
+  description: |
+    Shared schemas, security schemes, parameters, and responses reused across
+    every Phase 2 contract file. Concrete operation definitions live in the
+    sibling files (`auth.yaml`, `users.yaml`, `roles.yaml`, ...).
+
+components:
+  securitySchemes:
+    SupabaseJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Supabase Auth access token. Validated server-side against the project
+        JWKS. Required for every endpoint except those documented as Public or
+        Optional Auth.
+    SupabaseWebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Supabase-Signature
+      description: |
+        HMAC-SHA256 of the raw request body using the platform's
+        SUPABASE_WEBHOOK_SECRET. Required for every Supabase webhook event.
+
+  parameters:
+    AcceptLanguage:
+      name: Accept-Language
+      in: header
+      required: false
+      schema: { type: string, enum: [en, ar] }
+      description: Locale hint for any localized field in the response. Defaults to `en`.
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    PageCursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+      description: Opaque cursor returned by the previous page response.
+    PageNumber:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+      description: For offset-paginated endpoints (users, roles). Audit logs use cursor pagination.
+
+  schemas:
+    Localized:
+      type: object
+      required: [en, ar]
+      properties:
+        en: { type: string }
+        ar: { type: string }
+
+    UserStatus:
+      type: string
+      enum: [active, inactive, suspended, pending_verification, deleted]
+
+    ScopeType:
+      type: string
+      enum: [platform, merchant, store]
+
+    SuccessEnvelope:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, enum: [true] }
+        data: {}
+        meta:
+          type: object
+          properties:
+            requestId: { type: string }
+            timestamp: { type: string, format: date-time }
+
+    PaginationMetaOffset:
+      type: object
+      required: [page, pageSize, total, totalPages]
+      properties:
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+
+    PaginationMetaCursor:
+      type: object
+      required: [pageSize]
+      properties:
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        nextCursor: { type: string, nullable: true }
+
+    ErrorEnvelope:
+      type: object
+      required: [success, error]
+      properties:
+        success: { type: boolean, enum: [false] }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: "Stable machine-readable code, e.g. AUTH/JWT_INVALID" }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+        meta:
+          type: object
+          properties:
+            requestId: { type: string }
+            timestamp: { type: string, format: date-time }
+
+    UserProfileDto:
+      type: object
+      required: [id, email, preferredLanguage, defaultCurrency, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        firstName: { type: string, nullable: true, maxLength: 80 }
+        lastName: { type: string, nullable: true, maxLength: 80 }
+        avatarUrl: { type: string, format: uri, nullable: true }
+        preferredLanguage: { type: string, enum: [en, ar] }
+        defaultCurrency: { type: string, minLength: 3, maxLength: 3, description: "ISO-4217" }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    RoleDto:
+      type: object
+      required: [id, key, label, isSystem]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, description: "Stable role code (e.g. 'merchant')" }
+        label: { $ref: '#/components/schemas/Localized' }
+        description:
+          oneOf: [{ $ref: '#/components/schemas/Localized' }, { type: 'null' }]
+        isSystem: { type: boolean }
+
+    PermissionDto:
+      type: object
+      required: [id, key, module, resource, action, label]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, description: "module.resource.action" }
+        module: { type: string }
+        resource: { type: string }
+        action: { type: string }
+        label: { $ref: '#/components/schemas/Localized' }
+        description:
+          oneOf: [{ $ref: '#/components/schemas/Localized' }, { type: 'null' }]
+
+    AccessScopeDto:
+      type: object
+      required: [scopeType]
+      properties:
+        scopeType: { $ref: '#/components/schemas/ScopeType' }
+        merchantId: { type: string, format: uuid, nullable: true }
+        storeId: { type: string, format: uuid, nullable: true }
+
+    AuthEnvelopeDto:
+      type: object
+      required: [user, roles, permissions, accessScopes, isSuperAdmin]
+      properties:
+        user: { $ref: '#/components/schemas/UserProfileDto' }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/RoleDto' }
+        permissions:
+          type: array
+          items: { type: string }
+        accessScopes:
+          type: array
+          items: { $ref: '#/components/schemas/AccessScopeDto' }
+        isSuperAdmin: { type: boolean }
+
+    AuditLogDto:
+      type: object
+      required: [id, occurredAt, action, severity]
+      properties:
+        id: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        actor:
+          type: object
+          nullable: true
+          properties:
+            id: { type: string, format: uuid }
+            email: { type: string, format: email }
+        action: { type: string }
+        entityType: { type: string, nullable: true }
+        entityId: { type: string, nullable: true }
+        merchantId: { type: string, format: uuid, nullable: true }
+        storeId: { type: string, format: uuid, nullable: true }
+        metadata: { type: object, nullable: true, additionalProperties: true }
+        ipAddress: { type: string, nullable: true }
+        userAgent: { type: string, nullable: true }
+        severity: { type: string, enum: [info, notice, warning, critical] }
+
+  responses:
+    Unauthorized:
+      description: Authentication required, JWT missing/invalid/expired, or active profile required.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: Authenticated but missing the required role, permission, or merchant/store scope.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Target resource does not exist or is not visible to the caller.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: State conflict (e.g. duplicate role key, attempt to delete a system role).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    UnprocessableEntity:
+      description: DTO validation failure.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: Rate limit exceeded for the endpoint's bucket. See FR-048 thresholds.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the bucket re-opens.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }

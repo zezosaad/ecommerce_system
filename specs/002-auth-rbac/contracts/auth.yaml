@@ -1,0 +1,147 @@
+openapi: 3.0.3
+info:
+  title: Auth & Profile
+  version: 1.0.0
+  description: |
+    Endpoints under `/api/v1/auth/*`. All schemas, security schemes, parameters,
+    and shared responses are defined in `_shared.yaml`. Refer to that file when
+    integrating these contracts into the published OpenAPI spec.
+
+paths:
+  /api/v1/auth/me:
+    get:
+      operationId: getAuthMe
+      summary: Return the caller's identity envelope (profile + roles + permissions + access scope).
+      description: |
+        - Validates JWT, then resolves or **lazily creates** the caller's
+          application profile (matching their Supabase user id).
+        - For a `pending_verification` profile, re-reads `email_confirmed_at`
+          from Supabase and flips status to `active` (FR-005b).
+        - Suspended/deleted users → 401 with code `AUTH/PROFILE_BLOCKED`.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Auth]
+      x-rate-limit: { bucket: me-read, scope: per-user, limit: 30/min }
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: Identity envelope.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/AuthEnvelopeDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/sync-profile:
+    post:
+      operationId: syncAuthProfile
+      summary: Idempotently create/update the caller's application profile from their Supabase identity.
+      description: |
+        - First call after Supabase signup: creates the application profile.
+          - For self-registered customers, status is set to `pending_verification`
+            UNTIL `email_confirmed_at` is set on Supabase, then `active`.
+          - The `customer` role is auto-assigned for self-registered profiles.
+        - Subsequent calls: idempotently refresh derived fields
+          (e.g., `email`, `lastSeenAt`).
+      security: [{ SupabaseJWT: [] }]
+      tags: [Auth]
+      x-rate-limit: { bucket: auth-sync, scope: per-ip, limit: 10/min }
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional first-login defaults the client may suggest.
+              properties:
+                preferredLanguage: { type: string, enum: [en, ar] }
+                firstName: { type: string, maxLength: 80 }
+                lastName: { type: string, maxLength: 80 }
+                phone: { type: string, description: "E.164" }
+      responses:
+        '200':
+          description: Identity envelope (same shape as `GET /auth/me`).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/AuthEnvelopeDto' }
+        '201':
+          description: Profile newly created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/AuthEnvelopeDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/profile:
+    patch:
+      operationId: updateAuthProfile
+      summary: Update self-editable fields on the caller's profile.
+      description: |
+        Self-editable fields: `firstName`, `lastName`, `avatarUrl`,
+        `preferredLanguage`, `defaultCurrency`, `phone`.
+        `status` and roles are NOT editable here (FR-007). `email` changes go
+        through Supabase Auth and are reflected on the next sync.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                firstName: { type: string, maxLength: 80 }
+                lastName: { type: string, maxLength: 80 }
+                avatarUrl: { type: string, format: uri, nullable: true }
+                preferredLanguage: { type: string, enum: [en, ar] }
+                defaultCurrency: { type: string, minLength: 3, maxLength: 3 }
+                phone: { type: string, nullable: true, description: "E.164 or null" }
+      responses:
+        '200':
+          description: Updated profile.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/UserProfileDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+
+  /api/v1/auth/logout:
+    post:
+      operationId: postAuthLogout
+      summary: Server-side logout hook (audit only; does not invalidate the JWT).
+      description: |
+        Writes an `auth.logout` audit entry. The frontend MUST also call
+        Supabase JS `signOut()` to clear the local session and revoke the
+        refresh token at Supabase.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Auth]
+      responses:
+        '204':
+          description: Logout recorded.
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }

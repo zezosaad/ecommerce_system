@@ -8,25 +8,57 @@ datasource db {
   directUrl         = env("DIRECT_URL")
 }
 
-model User {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  supabaseUserId  String            @unique(map: "users_supabase_user_id_key") @map("supabase_user_id") @db.Uuid
-  email           String
-  displayName     String?           @map("display_name")
-  avatarUrl       String?           @map("avatar_url")
-  locale          String            @default("en")
-  phone           String?
-  isActive        Boolean           @default(true) @map("is_active")
-  lastSeenAt      DateTime?         @map("last_seen_at") @db.Timestamptz
-  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?         @map("deleted_at") @db.Timestamptz
+enum UserStatus {
+  active
+  inactive
+  suspended
+  pending_verification
+  deleted
 
-  userRoles       UserRole[]       @relation("UserRolesUser")
-  auditLogs       AuditLog[]       @relation("AuditActor")
-  grantedByRoles  UserRole[]       @relation("GrantedBy")
+  @@map("user_status")
+}
+
+enum ScopeType {
+  platform
+  merchant
+  store
+
+  @@map("scope_type")
+}
+
+enum StaffMembershipStatus {
+  invited
+  active
+  suspended
+  revoked
+
+  @@map("staff_membership_status")
+}
+
+model User {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supabaseUserId    String              @unique(map: "users_supabase_user_id_key") @map("supabase_user_id") @db.Uuid
+  email             String
+  phone             String?
+  firstName         String?             @map("first_name")
+  lastName          String?             @map("last_name")
+  avatarUrl         String?             @map("avatar_url")
+  preferredLanguage String              @default("en") @map("preferred_language")
+  defaultCurrency   String              @default("USD") @map("default_currency")
+  status            UserStatus          @default(active)
+  lastSeenAt        DateTime?           @map("last_seen_at") @db.Timestamptz
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?           @map("deleted_at") @db.Timestamptz
+
+  userRoles         UserRole[]          @relation("UserRolesUser")
+  auditLogs         AuditLog[]          @relation("AuditActor")
+  grantedByRoles    UserRole[]          @relation("GrantedBy")
+  accessScopes      UserAccessScope[]
+  staffMemberships  StaffMembership[]
 
   @@unique([email], map: "users_email_active_key")
+  @@index([status], map: "users_status_idx")
   @@map("users")
 }
 
@@ -42,17 +74,24 @@ model Role {
   rolePermissions RolePermission[]
   userRoles       UserRole[]
 
+  @@index([isSystem], map: "roles_is_system_idx")
   @@map("roles")
 }
 
 model Permission {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   code        String    @unique
+  module      String
+  resource    String
+  action      String
+  label       Json?
   description Json?
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   rolePermissions RolePermission[]
 
+  @@index([module], map: "permissions_module_idx")
+  @@index([module, resource], map: "permissions_module_resource_idx")
   @@map("permissions")
 }
 
@@ -115,6 +154,7 @@ model AuditLog {
   @@index([merchantId, occurredAt(sort: Desc)], map: "audit_logs_merchant_occurred_at_idx")
   @@index([targetType, targetId], map: "audit_logs_target_idx")
   @@index([actionCode], map: "audit_logs_action_code_idx")
+  @@index([actionCode, occurredAt(sort: Desc)], map: "audit_logs_action_occurred_idx")
   @@map("audit_logs")
 }
 
@@ -252,4 +292,59 @@ model IdempotencyRecord {
   @@unique([actorUserId, route, idempotencyKey], map: "idempotency_records_unique")
   @@index([expiresAt], map: "idempotency_records_expires_at_idx")
   @@map("idempotency_records")
+}
+
+model UserAccessScope {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  scopeType  ScopeType @map("scope_type")
+  merchantId String?   @map("merchant_id") @db.Uuid
+  storeId    String?   @map("store_id") @db.Uuid
+  source     String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeType, merchantId, storeId, source], map: "user_access_scope_unique")
+  @@index([userId], map: "user_access_scope_user_idx")
+  @@index([merchantId], map: "user_access_scope_merchant_idx")
+  @@index([storeId], map: "user_access_scope_store_idx")
+  @@map("user_access_scope")
+}
+
+model StaffMembership {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String                  @map("user_id") @db.Uuid
+  merchantId        String                  @map("merchant_id") @db.Uuid
+  storeId           String?                 @map("store_id") @db.Uuid
+  status            StaffMembershipStatus   @default(invited)
+  invitedAt         DateTime                @default(now()) @map("invited_at") @db.Timestamptz
+  joinedAt          DateTime?               @map("joined_at") @db.Timestamptz
+  invitedByUserId   String?                 @map("invited_by_user_id") @db.Uuid
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, merchantId, storeId], map: "staff_membership_unique")
+  @@index([merchantId], map: "staff_membership_merchant_idx")
+  @@index([storeId], map: "staff_membership_store_idx")
+  @@map("staff_memberships")
+}
+
+model WebhookEvent {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source          String
+  eventId         String    @map("event_id")
+  eventType       String    @map("event_type")
+  signatureValid  Boolean   @map("signature_valid")
+  payload         Json
+  receivedAt      DateTime  @default(now()) @map("received_at") @db.Timestamptz
+  processedAt     DateTime? @map("processed_at") @db.Timestamptz
+  processingError String?   @map("processing_error")
+
+  @@unique([source, eventId], map: "webhook_events_source_event_unique")
+  @@index([eventType, receivedAt(sort: Desc)], map: "webhook_events_type_received_idx")
+  @@map("webhook_events")
 }

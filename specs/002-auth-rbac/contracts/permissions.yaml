@@ -1,0 +1,78 @@
+openapi: 3.0.3
+info:
+  title: Permissions Catalog
+  version: 1.0.0
+
+paths:
+  /api/v1/permissions:
+    get:
+      operationId: listPermissions
+      summary: List the full permission catalog (flat).
+      description: Required permission `permissions.manage.view`.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Permissions]
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+        - { name: module, in: query, schema: { type: string }, description: "Filter by module (e.g., `orders`)" }
+        - $ref: '_shared.yaml#/components/parameters/PageNumber'
+        - $ref: '_shared.yaml#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Page of permissions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '_shared.yaml#/components/schemas/PermissionDto' }
+                      meta: { $ref: '_shared.yaml#/components/schemas/PaginationMetaOffset' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+
+  /api/v1/permissions/grouped:
+    get:
+      operationId: listPermissionsGrouped
+      summary: Permission catalog grouped by module then resource (admin selector UX).
+      description: |
+        Required permission `permissions.manage.view`. Designed to power the
+        permissions tree in the role-edit UI without further reshaping on the
+        client.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Permissions]
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+      responses:
+        '200':
+          description: Grouped catalog.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          type: object
+                          required: [module, label, resources]
+                          properties:
+                            module: { type: string }
+                            label: { $ref: '_shared.yaml#/components/schemas/Localized' }
+                            resources:
+                              type: array
+                              items:
+                                type: object
+                                required: [resource, label, permissions]
+                                properties:
+                                  resource: { type: string }
+                                  label: { $ref: '_shared.yaml#/components/schemas/Localized' }
+                                  permissions:
+                                    type: array
+                                    items: { $ref: '_shared.yaml#/components/schemas/PermissionDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }

@@ -16,6 +16,9 @@ test.describe('Locale Switch - Website', () => {
 
   test('store slug route renders placeholder', async ({ page }) => {
     await page.goto('/en/stores/test-store');
-    await expect(page.locator('text=Store')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Store Not Found' }),
+    ).toBeVisible();
+    await expect(page.getByText('test-store')).toBeVisible();
   });
 });

@@ -1,14 +1,23 @@
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as express from 'express';
+import type { Request, Response } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
+  // Capture the raw request body for webhook signature verification.
+  app.use(
+    express.json({
+      verify: (req: Request & { rawBody?: Buffer }, _res: Response, buf: Buffer) => {
+        req.rawBody = buf;
+      },
+    }),
+  );
+
   const apiPrefix = process.env.API_PREFIX ?? '/api/v1';
-  app.setGlobalPrefix(apiPrefix, {
-    exclude: ['health'],
-  });
+  app.setGlobalPrefix(apiPrefix);
 
   app.enableCors({
     origin: (process.env.CORS_ORIGINS ?? '').split(',').filter(Boolean),

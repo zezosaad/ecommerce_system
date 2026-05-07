@@ -51,15 +51,23 @@ export class IdempotencyInterceptor implements NestInterceptor {
     return from(computeBodyHash(request.body)).pipe(
       switchMap((bodyHash) =>
         from(
-          this.prisma.idempotencyRecord.findUnique({
-            where: {
-              actorUserId_route_idempotencyKey: {
-                actorUserId,
-                route,
-                idempotencyKey,
-              },
-            },
-          }),
+          actorUserId
+            ? this.prisma.idempotencyRecord.findUnique({
+                where: {
+                  actorUserId_route_idempotencyKey: {
+                    actorUserId,
+                    route,
+                    idempotencyKey,
+                  },
+                },
+              })
+            : this.prisma.idempotencyRecord.findFirst({
+                where: {
+                  actorUserId: null,
+                  route,
+                  idempotencyKey,
+                },
+              }),
         ).pipe(
           switchMap((existing) => {
             if (existing) {

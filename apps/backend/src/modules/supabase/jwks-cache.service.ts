@@ -17,10 +17,12 @@ export class JwksCacheService implements OnModuleInit {
   private lastFetchSuccess = true;
   private fetchInProgress = false;
   private refreshInterval: NodeJS.Timeout | null = null;
+  private endpointAvailable = true;
 
   private readonly ttlMs: number;
   private readonly refreshMs: number;
   private readonly supabaseUrl: string;
+  private readonly supabaseAnonKey: string;
 
   constructor(private configService: ConfigService<EnvConfig>) {
     this.ttlMs = (configService.get('JWKS_TTL_SECONDS', { infer: true }) ?? 3600) * 1000;
@@ -30,15 +32,29 @@ export class JwksCacheService implements OnModuleInit {
       throw new Error('SUPABASE_URL is required');
     }
     this.supabaseUrl = supabaseUrl;
+    const supabaseAnonKey = configService.get('SUPABASE_ANON_KEY', { infer: true });
+    if (!supabaseAnonKey) {
+      throw new Error('SUPABASE_ANON_KEY is required');
+    }
+    this.supabaseAnonKey = supabaseAnonKey;
   }
 
   async onModuleInit(): Promise<void> {
-    await this.fetchKeys();
+    await this.refreshKeys({ throwWhenEmpty: false, isInitialProbe: true });
+    if (!this.endpointAvailable) {
+      this.logger.log(
+        'JWKS endpoint not exposed by this Supabase project (asymmetric JWT signing not enabled). ' +
+          'Falling back to HMAC verification via SUPABASE_JWT_SECRET. Background JWKS refresh disabled.',
+      );
+      return;
+    }
     this.refreshInterval = setInterval(() => {
-      this.fetchKeys().catch((err) => {
-        this.logger.warn(`Background JWKS refresh failed: ${err.message}`);
-        this.lastFetchSuccess = false;
-      });
+      this.refreshKeys({ throwWhenEmpty: false, isInitialProbe: false }).catch(
+        (err) => {
+          this.logger.warn(`Background JWKS refresh failed: ${err.message}`);
+          this.lastFetchSuccess = false;
+        },
+      );
     }, this.refreshMs);
   }
 
@@ -51,35 +67,38 @@ export class JwksCacheService implements OnModuleInit {
       }
     }
 
-    const fetchedKey = await this.fetchKeyForKid(kid);
-    return fetchedKey;
+    if (!this.endpointAvailable) {
+      return null;
+    }
+
+    return this.fetchKeyForKid(kid);
   }
 
   isHealthy(): boolean {
+    if (!this.endpointAvailable) return true;
     if (this.cachedKeys.size === 0) return false;
     return this.lastFetchSuccess;
   }
 
   isDegraded(): boolean {
+    if (!this.endpointAvailable) return false;
     if (this.cachedKeys.size > 0 && !this.lastFetchSuccess) return true;
     return false;
   }
 
-  private async fetchKeys(): Promise<void> {
+  isJwksAvailable(): boolean {
+    return this.endpointAvailable;
+  }
+
+  private async refreshKeys(options: {
+    throwWhenEmpty: boolean;
+    isInitialProbe?: boolean;
+  }): Promise<void> {
     if (this.fetchInProgress) return;
     this.fetchInProgress = true;
 
     try {
-      const jwksUrl = `${this.supabaseUrl}/auth/v1/jwks`;
-      const response = await fetch(jwksUrl, {
-        signal: AbortSignal.timeout(5000),
-      });
-
-      if (!response.ok) {
-        throw new Error(`JWKS endpoint returned ${response.status}`);
-      }
-
-      const jwks = (await response.json()) as { keys?: Array<Record<string, unknown>> };
+      const jwks = await this.fetchJwks(5000);
 
       const newKeys = new Map<string, CachedKey>();
       for (const key of jwks.keys ?? []) {
@@ -107,12 +126,30 @@ export class JwksCacheService implements OnModuleInit {
       }
     } catch (err) {
       this.lastFetchSuccess = false;
-      this.logger.warn(`JWKS fetch failed: ${(err as Error).message}. Cached keys still valid.`);
-      if (this.cachedKeys.size === 0) {
+      const message = (err as Error).message;
+      // Only treat a 404 as "endpoint not available" during the initial
+      // module-init probe, where the project has explicitly never exposed
+      // JWKS. Transient 404s during background refresh must not permanently
+      // disable verification — keep the cached keys and retry on the next
+      // tick.
+      if (message.includes('returned 404') && options.isInitialProbe) {
+        this.endpointAvailable = false;
+        this.stopBackgroundRefresh();
+      } else {
+        this.logger.warn(`JWKS fetch failed: ${message}. Cached keys still valid.`);
+      }
+      if (options.throwWhenEmpty && this.cachedKeys.size === 0 && this.endpointAvailable) {
         throw err;
       }
     } finally {
       this.fetchInProgress = false;
+    }
+  }
+
+  private stopBackgroundRefresh(): void {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval);
+      this.refreshInterval = null;
     }
   }
 
@@ -124,14 +161,7 @@ export class JwksCacheService implements OnModuleInit {
 
     try {
       this.fetchInProgress = true;
-      const jwksUrl = `${this.supabaseUrl}/auth/v1/jwks`;
-      const response = await fetch(jwksUrl, {
-        signal: AbortSignal.timeout(1000),
-      });
-
-      if (!response.ok) return null;
-
-      const jwks = (await response.json()) as { keys?: Array<Record<string, unknown>> };
+      const jwks = await this.fetchJwks(1000);
       for (const key of jwks.keys ?? []) {
         const keyKid = typeof key.kid === 'string' ? key.kid : undefined;
         const kty = typeof key.kty === 'string' ? key.kty : undefined;
@@ -158,9 +188,24 @@ export class JwksCacheService implements OnModuleInit {
     }
   }
 
-  onModuleDestroy(): void {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
+  private async fetchJwks(timeoutMs: number): Promise<{ keys?: Array<Record<string, unknown>> }> {
+    const jwksUrl = `${this.supabaseUrl}/auth/v1/jwks`;
+    const response = await fetch(jwksUrl, {
+      headers: {
+        apikey: this.supabaseAnonKey,
+        Authorization: `Bearer ${this.supabaseAnonKey}`,
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!response.ok) {
+      throw new Error(`JWKS endpoint returned ${response.status}`);
     }
+
+    return response.json() as Promise<{ keys?: Array<Record<string, unknown>> }>;
+  }
+
+  onModuleDestroy(): void {
+    this.stopBackgroundRefresh();
   }
 }

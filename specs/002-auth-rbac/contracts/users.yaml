@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Users (Admin)
+  version: 1.0.0
+
+paths:
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: List application user profiles (admin).
+      description: |
+        Required permission: `users.manage.view`. Super Admin always permitted.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Users]
+      x-rate-limit: { bucket: me-read, scope: per-user, limit: 30/min }
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+        - $ref: '_shared.yaml#/components/parameters/PageNumber'
+        - $ref: '_shared.yaml#/components/parameters/PageSize'
+        - { name: q, in: query, schema: { type: string }, description: "Free-text search on email + names" }
+        - { name: status, in: query, schema: { $ref: '_shared.yaml#/components/schemas/UserStatus' } }
+        - { name: roleKey, in: query, schema: { type: string }, description: "Filter to users assigned this role" }
+        - { name: merchantId, in: query, schema: { type: string, format: uuid } }
+        - { name: storeId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Page of users.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '_shared.yaml#/components/schemas/UserProfileDto' }
+                      meta:
+                        allOf:
+                          - $ref: '_shared.yaml#/components/schemas/PaginationMetaOffset'
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/users/{id}:
+    get:
+      operationId: getUser
+      summary: Fetch a single user profile with their roles and access scope.
+      description: |
+        Required permission: `users.manage.view`.
+        Response embeds the user's roles and access scope so admin UIs do not
+        need a second round-trip.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Users]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: User detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [user, roles, accessScopes]
+                        properties:
+                          user: { $ref: '_shared.yaml#/components/schemas/UserProfileDto' }
+                          roles:
+                            type: array
+                            items: { $ref: '_shared.yaml#/components/schemas/RoleDto' }
+                          accessScopes:
+                            type: array
+                            items: { $ref: '_shared.yaml#/components/schemas/AccessScopeDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }
+
+  /api/v1/users/{id}/status:
+    patch:
+      operationId: updateUserStatus
+      summary: Change a user's status (active / inactive / suspended / deleted).
+      description: |
+        Required permission: `users.manage.suspend` (suspend / inactive) or
+        `users.manage.delete` (deleted). `pending_verification` cannot be set
+        manually. Cascading effect: all `EffectivePermissions` cache entries
+        for the user are invalidated synchronously.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Users]
+      x-rate-limit: { bucket: admin-write, scope: per-user, limit: 20/min }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              additionalProperties: false
+              properties:
+                status:
+                  type: string
+                  enum: [active, inactive, suspended, deleted]
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Updated profile.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/UserProfileDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }
+        '409':
+          description: |
+            Refused. Examples: attempt to suspend the last active Super Admin;
+            attempt to deactivate yourself.
+          content:
+            application/json:
+              schema: { $ref: '_shared.yaml#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/users/{id}/roles:
+    patch:
+      operationId: updateUserRoles
+      summary: Replace the set of role assignments for a user.
+      description: |
+        Required permission: `roles.manage.update` AND scope authority for any
+        merchant/store referenced in the assignments. Body is the **desired
+        full set** of role assignments; the server diffs against the current
+        set and adds/removes accordingly inside a single transaction. The
+        `UserAccessScope` projection is rebuilt in the same transaction.
+
+        Refuses to remove the last `super_admin` role from the last Super Admin.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Users]
+      x-rate-limit: { bucket: admin-write, scope: per-user, limit: 20/min }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assignments]
+              additionalProperties: false
+              properties:
+                assignments:
+                  type: array
+                  items:
+                    type: object
+                    required: [roleKey]
+                    additionalProperties: false
+                    properties:
+                      roleKey: { type: string }
+                      merchantId: { type: string, format: uuid, nullable: true }
+                      storeId: { type: string, format: uuid, nullable: true }
+      responses:
+        '200':
+          description: Updated assignments.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          roles:
+                            type: array
+                            items: { $ref: '_shared.yaml#/components/schemas/RoleDto' }
+                          accessScopes:
+                            type: array
+                            items: { $ref: '_shared.yaml#/components/schemas/AccessScopeDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }
+        '409': { $ref: '_shared.yaml#/components/responses/Conflict' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }

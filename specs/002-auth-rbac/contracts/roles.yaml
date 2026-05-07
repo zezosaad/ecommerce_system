@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Roles
+  version: 1.0.0
+
+paths:
+  /api/v1/roles:
+    get:
+      operationId: listRoles
+      summary: List all roles (system + custom).
+      description: Required permission `roles.manage.view`.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Roles]
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+        - $ref: '_shared.yaml#/components/parameters/PageNumber'
+        - $ref: '_shared.yaml#/components/parameters/PageSize'
+        - { name: includePermissions, in: query, schema: { type: boolean, default: false }, description: "Embed RolePermission keys per row" }
+      responses:
+        '200':
+          description: Page of roles.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '_shared.yaml#/components/schemas/RoleDto'
+                            - type: object
+                              properties:
+                                permissions:
+                                  type: array
+                                  items: { type: string }
+                                  description: Present only when `includePermissions=true`.
+                      meta: { $ref: '_shared.yaml#/components/schemas/PaginationMetaOffset' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+
+    post:
+      operationId: createRole
+      summary: Create a custom role.
+      description: |
+        Required permission `roles.manage.create`. The new role is always
+        `isSystem = false`. Body's `permissions` (array of permission keys) is
+        applied transactionally; unknown keys → 422.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Roles]
+      x-rate-limit: { bucket: admin-write, scope: per-user, limit: 20/min }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, label]
+              additionalProperties: false
+              properties:
+                key: { type: string, pattern: '^[a-z][a-z0-9_]{1,63}$' }
+                label: { $ref: '_shared.yaml#/components/schemas/Localized' }
+                description:
+                  oneOf: [{ $ref: '_shared.yaml#/components/schemas/Localized' }, { type: 'null' }]
+                permissions:
+                  type: array
+                  items: { type: string }
+                  default: []
+      responses:
+        '201':
+          description: Role created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/RoleDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '409':
+          description: Duplicate role key.
+          content:
+            application/json:
+              schema: { $ref: '_shared.yaml#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+  /api/v1/roles/{id}:
+    get:
+      operationId: getRole
+      summary: Fetch one role with its full permission list.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Roles]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Role detail.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '_shared.yaml#/components/schemas/RoleDto'
+                          - type: object
+                            required: [permissions]
+                            properties:
+                              permissions:
+                                type: array
+                                items: { $ref: '_shared.yaml#/components/schemas/PermissionDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }
+
+    patch:
+      operationId: updateRole
+      summary: Update a role's label/description and/or its permission set.
+      description: |
+        Required permission `roles.manage.update`. System roles' `key` cannot
+        be changed; their `label`, `description`, and `permissions` may be
+        edited (except `super_admin`, whose permissions are computed and
+        non-editable).
+      security: [{ SupabaseJWT: [] }]
+      tags: [Roles]
+      x-rate-limit: { bucket: admin-write, scope: per-user, limit: 20/min }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              additionalProperties: false
+              properties:
+                label: { $ref: '_shared.yaml#/components/schemas/Localized' }
+                description:
+                  oneOf: [{ $ref: '_shared.yaml#/components/schemas/Localized' }, { type: 'null' }]
+                permissions:
+                  type: array
+                  items: { type: string }
+                  description: Replaces the role's full permission set.
+      responses:
+        '200':
+          description: Role updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/RoleDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }
+        '409':
+          description: Refused (e.g. attempt to remove all permissions from `super_admin` — not editable).
+          content:
+            application/json:
+              schema: { $ref: '_shared.yaml#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
+
+    delete:
+      operationId: deleteRole
+      summary: Delete a custom role.
+      description: |
+        Refused with 409 for any role where `isSystem = true` (FR-013).
+        Refused with 409 if any users still hold this role; the caller must
+        unassign first.
+      security: [{ SupabaseJWT: [] }]
+      tags: [Roles]
+      x-rate-limit: { bucket: admin-write, scope: per-user, limit: 20/min }
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204':
+          description: Role deleted.
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }
+        '409': { $ref: '_shared.yaml#/components/responses/Conflict' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
