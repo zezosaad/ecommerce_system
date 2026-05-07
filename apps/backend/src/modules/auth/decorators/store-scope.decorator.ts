@@ -7,7 +7,7 @@ export interface TenantContext {
   isSuperAdmin: boolean;
 }
 
-export const StoreScope = createParamDecorator(
+export const GetTenantContext = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): TenantContext => {
     const request = ctx.switchToHttp().getRequest<{
       authContext?: AuthContext;

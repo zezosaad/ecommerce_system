@@ -1,0 +1,72 @@
+openapi: 3.0.3
+info:
+  title: Audit Logs (Read-Only)
+  version: 1.0.0
+
+paths:
+  /api/v1/audit-logs:
+    get:
+      operationId: listAuditLogs
+      summary: Cursor-paginated, filterable audit log read.
+      description: |
+        Required permission `audit_logs.view`. No write/update/delete endpoints
+        are exposed — entries are written internally by the audit service.
+
+        Cursor pagination is used because the table is append-only and offset
+        pages drift as new rows arrive. Each response includes
+        `meta.nextCursor` (or `null` when exhausted).
+      security: [{ SupabaseJWT: [] }]
+      tags: [AuditLogs]
+      parameters:
+        - $ref: '_shared.yaml#/components/parameters/AcceptLanguage'
+        - $ref: '_shared.yaml#/components/parameters/PageCursor'
+        - $ref: '_shared.yaml#/components/parameters/PageSize'
+        - { name: actorUserId, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string }, description: "Exact `action_code` match" }
+        - { name: entityType, in: query, schema: { type: string } }
+        - { name: entityId, in: query, schema: { type: string } }
+        - { name: merchantId, in: query, schema: { type: string, format: uuid } }
+        - { name: storeId, in: query, schema: { type: string, format: uuid } }
+        - { name: from, in: query, schema: { type: string, format: date-time }, description: "Inclusive lower bound on occurredAt" }
+        - { name: to, in: query, schema: { type: string, format: date-time }, description: "Exclusive upper bound on occurredAt" }
+        - { name: severity, in: query, schema: { type: string, enum: [info, notice, warning, critical] } }
+      responses:
+        '200':
+          description: Audit-log page.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '_shared.yaml#/components/schemas/AuditLogDto' }
+                      meta: { $ref: '_shared.yaml#/components/schemas/PaginationMetaCursor' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+
+  /api/v1/audit-logs/{id}:
+    get:
+      operationId: getAuditLog
+      summary: Fetch a single audit-log entry.
+      description: Required permission `audit_logs.view`.
+      security: [{ SupabaseJWT: [] }]
+      tags: [AuditLogs]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Audit-log entry.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '_shared.yaml#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '_shared.yaml#/components/schemas/AuditLogDto' }
+        '401': { $ref: '_shared.yaml#/components/responses/Unauthorized' }
+        '403': { $ref: '_shared.yaml#/components/responses/Forbidden' }
+        '404': { $ref: '_shared.yaml#/components/responses/NotFound' }

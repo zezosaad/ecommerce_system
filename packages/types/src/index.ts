@@ -24,6 +24,7 @@ export enum ErrorCode {
   AUTHZ_TENANT_ISOLATION = 'AUTHZ.TENANT_ISOLATION',
   AUTHZ_PROFILE_MISSING = 'AUTHZ.PROFILE_MISSING',
   AUTHZ_NO_ROLES_ASSIGNED = 'AUTHZ.NO_ROLES_ASSIGNED',
+  AUTHZ_PROFILE_BLOCKED = 'AUTHZ.PROFILE_BLOCKED',
   VALIDATION_FAILED = 'VALIDATION.FAILED',
   VALIDATION_FIELD_REQUIRED = 'VALIDATION.FIELD_REQUIRED',
   VALIDATION_FIELD_TYPE = 'VALIDATION.FIELD_TYPE',
@@ -82,3 +83,16 @@ export interface PaginationQuery {
   page_size?: number;
   sort?: string;
 }
+
+export type {
+  UserStatus,
+  ScopeType,
+  Locale,
+  Localized,
+  UserProfileDto,
+  RoleDto,
+  PermissionDto,
+  AccessScopeDto,
+  AuthEnvelopeDto,
+  AuditLogDto,
+} from './auth';

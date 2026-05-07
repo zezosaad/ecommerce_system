@@ -16,6 +16,136 @@
       "ar": "العربية"
     }
   },
+  "auth": {
+    "login": {
+      "title": "تسجيل الدخول",
+      "subtitle": "أدخل بيانات اعتمادك للوصول إلى لوحة التحكم",
+      "emailLabel": "البريد الإلكتروني",
+      "emailPlaceholder": "you@company.com",
+      "passwordLabel": "كلمة المرور",
+      "passwordPlaceholder": "أدخل كلمة المرور",
+      "submit": "تسجيل الدخول",
+      "signingIn": "جارٍ تسجيل الدخول...",
+      "error": {
+        "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+        "unexpected": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+      },
+      "success": "تم تسجيل الدخول بنجاح"
+    },
+    "customer": {
+      "register": {
+        "title": "إنشاء حساب",
+        "subtitle": "انضم إلى سوق فيندور هب",
+        "nameLabel": "الاسم الكامل",
+        "namePlaceholder": "اسمك",
+        "emailLabel": "البريد الإلكتروني",
+        "emailPlaceholder": "you@example.com",
+        "passwordLabel": "كلمة المرور",
+        "passwordPlaceholder": "أنشئ كلمة مرور",
+        "confirmPasswordLabel": "تأكيد كلمة المرور",
+        "confirmPasswordPlaceholder": "أعد إدخال كلمة المرور",
+        "submit": "إنشاء حساب",
+        "creating": "جارٍ إنشاء الحساب...",
+        "success": "تم إنشاء الحساب! يرجى التحقق من بريدك الإلكتروني لتفعيل حسابك.",
+        "error": {
+          "passwordMismatch": "كلمتا المرور غير متطابقتين",
+          "weakPassword": "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل",
+          "emailInUse": "هذا البريد الإلكتروني مسجل بالفعل",
+          "unexpected": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+        },
+        "loginLink": "لديك حساب بالفعل؟ تسجيل الدخول"
+      },
+      "login": {
+        "title": "تسجيل الدخول",
+        "subtitle": "مرحباً بعودتك إلى فيندور هب",
+        "emailLabel": "البريد الإلكتروني",
+        "emailPlaceholder": "you@example.com",
+        "passwordLabel": "كلمة المرور",
+        "passwordPlaceholder": "أدخل كلمة المرور",
+        "submit": "تسجيل الدخول",
+        "signingIn": "جارٍ تسجيل الدخول...",
+        "error": {
+          "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+          "unexpected": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
+        },
+        "registerLink": "ليس لديك حساب؟ أنشئ واحداً",
+        "forgotPassword": "نسيت كلمة المرور؟"
+      },
+      "resetPassword": {
+        "title": "إعادة تعيين كلمة المرور",
+        "subtitle": "أدخل بريدك الإلكتروني لتلقي رابط إعادة التعيين",
+        "emailLabel": "البريد الإلكتروني",
+        "emailPlaceholder": "you@example.com",
+        "submit": "إرسال رابط إعادة التعيين",
+        "sending": "جارٍ الإرسال...",
+        "success": "تحقق من بريدك الإلكتروني للحصول على رابط إعادة تعيين كلمة المرور.",
+        "error": {
+          "unexpected": "فشل إرسال رابط إعادة التعيين. يرجى المحاولة مرة أخرى."
+        },
+        "backToLogin": "العودة إلى تسجيل الدخول"
+      },
+      "verifyEmail": {
+        "title": "تحقق من بريدك الإلكتروني",
+        "subtitle": "حسابك جاهز تقريباً",
+        "message": "لقد أرسلنا رابط التحقق إلى بريدك الإلكتروني. يرجى النقر عليه لتفعيل حسابك.",
+        "checking": "جارٍ التحقق من حالة التحقق...",
+        "verified": "تم التحقق من البريد الإلكتروني! جارٍ إعادة التوجيه...",
+        "error": "تعذر التحقق من بريدك الإلكتروني. يرجى المحاولة مرة أخرى.",
+        "resend": "إعادة إرسال بريد التحقق"
+      },
+      "account": {
+        "title": "حسابي",
+        "orders": "الطلبات",
+        "addresses": "العناوين",
+        "wishlist": "قائمة الرغبات",
+        "settings": "الإعدادات",
+        "logout": "تسجيل الخروج",
+        "loading": "جارٍ تحميل حسابك..."
+      }
+    },
+    "logout": "تسجيل الخروج",
+    "unauthorized": {
+      "title": "غير مصرح",
+      "message": "ليس لديك صلاحية للوصول إلى هذه الصفحة."
+    },
+    "suspended": {
+      "title": "الحساب معلق",
+      "message": "تم تعليق حسابك. يرجى الاتصال بالدعم للمساعدة."
+    },
+    "roleLabel": {
+      "super_admin": "مشرف عام",
+      "platform_admin": "مشرف المنصة",
+      "merchant_owner": "مالك التاجر",
+      "merchant_staff": "موظف التاجر",
+      "customer": "عميل",
+      "support_agent": "وكيل الدعم",
+      "finance_admin": "مشرف مالي",
+      "shipping_agent": "وكيل الشحن"
+    },
+    "permissionGate": {
+      "notAuthorized": "ليس لديك صلاحية لتنفيذ هذا الإجراء."
+    },
+    "userMenu": {
+      "profile": "الملف الشخصي",
+      "settings": "الإعدادات",
+      "logout": "تسجيل الخروج"
+    },
+    "sidebar": {
+      "dashboard": "لوحة التحكم",
+      "admin": "الإدارة",
+      "roles": "الأدوار",
+      "users": "المستخدمين",
+      "permissions": "الصلاحيات",
+      "merchants": "التجار",
+      "stores": "المتاجر",
+      "products": "المنتجات",
+      "orders": "الطلبات",
+      "support": "الدعم",
+      "finance": "المالية",
+      "auditLogs": "سجل التدقيق",
+      "comingSoon": "قريباً"
+    }
+  },
   "health": {
     "title": "حالة النظام",
     "status": {

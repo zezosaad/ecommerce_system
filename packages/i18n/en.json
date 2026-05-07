@@ -16,6 +16,136 @@
       "ar": "العربية"
     }
   },
+  "auth": {
+    "login": {
+      "title": "Sign In",
+      "subtitle": "Enter your credentials to access the dashboard",
+      "emailLabel": "Email",
+      "emailPlaceholder": "you@company.com",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "submit": "Sign In",
+      "signingIn": "Signing in...",
+      "error": {
+        "invalidCredentials": "Invalid email or password",
+        "unexpected": "Something went wrong. Please try again."
+      },
+      "success": "Signed in successfully"
+    },
+    "customer": {
+      "register": {
+        "title": "Create Account",
+        "subtitle": "Join VendorHub marketplace",
+        "nameLabel": "Full Name",
+        "namePlaceholder": "Your name",
+        "emailLabel": "Email",
+        "emailPlaceholder": "you@example.com",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Create a password",
+        "confirmPasswordLabel": "Confirm Password",
+        "confirmPasswordPlaceholder": "Re-enter your password",
+        "submit": "Create Account",
+        "creating": "Creating account...",
+        "success": "Account created! Please check your email to verify your account.",
+        "error": {
+          "passwordMismatch": "Passwords do not match",
+          "weakPassword": "Password must be at least 6 characters",
+          "emailInUse": "This email is already registered",
+          "unexpected": "Something went wrong. Please try again."
+        },
+        "loginLink": "Already have an account? Sign in"
+      },
+      "login": {
+        "title": "Sign In",
+        "subtitle": "Welcome back to VendorHub",
+        "emailLabel": "Email",
+        "emailPlaceholder": "you@example.com",
+        "passwordLabel": "Password",
+        "passwordPlaceholder": "Enter your password",
+        "submit": "Sign In",
+        "signingIn": "Signing in...",
+        "error": {
+          "invalidCredentials": "Invalid email or password",
+          "unexpected": "Something went wrong. Please try again."
+        },
+        "registerLink": "Don't have an account? Create one",
+        "forgotPassword": "Forgot password?"
+      },
+      "resetPassword": {
+        "title": "Reset Password",
+        "subtitle": "Enter your email to receive a reset link",
+        "emailLabel": "Email",
+        "emailPlaceholder": "you@example.com",
+        "submit": "Send Reset Link",
+        "sending": "Sending...",
+        "success": "Check your email for the password reset link.",
+        "error": {
+          "unexpected": "Failed to send reset link. Please try again."
+        },
+        "backToLogin": "Back to sign in"
+      },
+      "verifyEmail": {
+        "title": "Verify Your Email",
+        "subtitle": "Your account is almost ready",
+        "message": "We've sent a verification link to your email. Please click it to activate your account.",
+        "checking": "Checking verification status...",
+        "verified": "Email verified! Redirecting...",
+        "error": "Could not verify your email. Please try again.",
+        "resend": "Resend verification email"
+      },
+      "account": {
+        "title": "My Account",
+        "orders": "Orders",
+        "addresses": "Addresses",
+        "wishlist": "Wishlist",
+        "settings": "Settings",
+        "logout": "Sign Out",
+        "loading": "Loading your account..."
+      }
+    },
+    "logout": "Sign Out",
+    "unauthorized": {
+      "title": "Unauthorized",
+      "message": "You do not have permission to access this page."
+    },
+    "suspended": {
+      "title": "Account Suspended",
+      "message": "Your account has been suspended. Please contact support for assistance."
+    },
+    "roleLabel": {
+      "super_admin": "Super Admin",
+      "platform_admin": "Platform Admin",
+      "merchant_owner": "Merchant Owner",
+      "merchant_staff": "Merchant Staff",
+      "customer": "Customer",
+      "support_agent": "Support Agent",
+      "finance_admin": "Finance Admin",
+      "shipping_agent": "Shipping Agent"
+    },
+    "permissionGate": {
+      "notAuthorized": "You don't have permission to perform this action."
+    },
+    "userMenu": {
+      "profile": "Profile",
+      "settings": "Settings",
+      "logout": "Sign Out"
+    },
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "admin": "Admin",
+      "roles": "Roles",
+      "users": "Users",
+      "permissions": "Permissions",
+      "merchants": "Merchants",
+      "stores": "Stores",
+      "products": "Products",
+      "orders": "Orders",
+      "support": "Support",
+      "finance": "Finance",
+      "auditLogs": "Audit Logs",
+      "comingSoon": "Coming soon"
+    }
+  },
   "health": {
     "title": "System Health",
     "status": {

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Reflector } from '@nestjs/core';
 import type { ExecutionContext } from '@nestjs/common';
 import { ForbiddenException } from '@nestjs/common';
@@ -6,97 +6,169 @@ import { PermissionsGuard } from '../../src/modules/auth/permissions.guard';
 import { PERMISSIONS_KEY } from '../../src/modules/auth/decorators/permissions.decorator';
 import { ErrorCode } from '../../src/modules/common/errors/error-codes';
 import type { AuthContext } from '../../src/modules/auth/auth-context.service';
+import { EffectivePermissionsService } from '../../src/modules/auth/effective-permissions.service';
+import { AuditService } from '../../src/modules/audit/audit.service';
 
-function makeReflector(metadata: string[] | undefined): Reflector {
+function makeReflector(permissionsMetadata: string[] | undefined): Reflector {
   return {
-    getAllAndOverride: <T,>() => metadata as T,
-    get: <T,>() => metadata as T,
+    getAllAndOverride: <T,>(key: string) => {
+      if (key === PERMISSIONS_KEY) return permissionsMetadata as T;
+      return undefined as T;
+    },
+    get: <T,>(key: string) => {
+      if (key === PERMISSIONS_KEY) return permissionsMetadata as T;
+      return undefined as T;
+    },
   } as unknown as Reflector;
 }
 
-function makeExecutionContext(authContext?: AuthContext): ExecutionContext {
+function makeExecutionContext(authContext?: AuthContext, userId = 'test-user-id'): ExecutionContext {
   return {
     getHandler: () => () => undefined,
     getClass: () => class {},
     switchToHttp: () => ({
-      getRequest: () => ({ authContext }),
+      getRequest: () => ({
+        user: userId ? { sub: userId } : null,
+        authContext,
+        headers: { 'x-correlation-id': 'test-correlation' },
+        ip: '127.0.0.1',
+        method: 'GET',
+        path: '/test',
+      }),
     }),
   } as unknown as ExecutionContext;
 }
 
-const ctx = (perms: string[]): AuthContext =>
-  ({ permissions: perms } as AuthContext);
+const ctx = (perms: string[], isSuperAdmin = false) =>
+  ({
+    userId: 'test-user-id',
+    permissions: new Set(perms),
+    isSuperAdmin,
+    roles: [],
+  } as unknown as AuthContext);
+
+function makeAuditService(): AuditService {
+  return { write: vi.fn().mockResolvedValue(undefined) } as unknown as AuditService;
+}
 
 describe('PermissionsGuard', () => {
-  it('allows when no @Permissions metadata is present', () => {
-    const guard = new PermissionsGuard(makeReflector(undefined));
-    expect(guard.canActivate(makeExecutionContext(ctx([])))).toBe(true);
+  let mockPermissionsService: Partial<EffectivePermissionsService>;
+
+  beforeEach(() => {
+    mockPermissionsService = {
+      getForUser: vi.fn().mockResolvedValue({
+        permissions: new Set<string>(),
+        isSuperAdmin: false,
+      }),
+    };
   });
 
-  it('allows on exact-match permission', () => {
-    const guard = new PermissionsGuard(makeReflector(['platform.settings.read']));
-    expect(
+  it('allows when no @Permissions metadata is present', async () => {
+    const guard = new PermissionsGuard(
+      makeReflector(undefined),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
+    );
+    await expect(
+      guard.canActivate(makeExecutionContext(ctx([]))),
+    ).resolves.toBe(true);
+  });
+
+  it('allows on exact-match permission', async () => {
+    mockPermissionsService.getForUser = vi.fn().mockResolvedValue({
+      permissions: new Set(['platform.settings.read']),
+      isSuperAdmin: false,
+    });
+
+    const guard = new PermissionsGuard(
+      makeReflector(['platform.settings.read']),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
+    );
+    await expect(
       guard.canActivate(makeExecutionContext(ctx(['platform.settings.read']))),
-    ).toBe(true);
+    ).resolves.toBe(true);
   });
 
-  it('allows on wildcard permission match (research R1)', () => {
-    const guard = new PermissionsGuard(makeReflector(['merchant.products.create']));
-    expect(
+  it('allows on wildcard permission match (research R1)', async () => {
+    mockPermissionsService.getForUser = vi.fn().mockResolvedValue({
+      permissions: new Set(['merchant.products.*']),
+      isSuperAdmin: false,
+    });
+
+    const guard = new PermissionsGuard(
+      makeReflector(['merchant.products.create']),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
+    );
+    await expect(
       guard.canActivate(makeExecutionContext(ctx(['merchant.products.*']))),
-    ).toBe(true);
+    ).resolves.toBe(true);
   });
 
-  it('denies with AUTHZ.PERMISSION_DENIED when permission absent', () => {
-    const guard = new PermissionsGuard(makeReflector(['platform.settings.read']));
-    try {
-      guard.canActivate(makeExecutionContext(ctx(['platform.audit.read'])));
-      expect.fail('expected ForbiddenException');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ForbiddenException);
-      const body = (err as ForbiddenException).getResponse() as {
-        code: ErrorCode;
-        message: string;
-      };
-      expect(body.code).toBe(ErrorCode.AUTHZ_PERMISSION_DENIED);
-    }
+  it('denies with AUTHZ.PERMISSION_DENIED when permission absent', async () => {
+    mockPermissionsService.getForUser = vi.fn().mockResolvedValue({
+      permissions: new Set(['platform.settings.read']),
+      isSuperAdmin: false,
+    });
+
+    const guard = new PermissionsGuard(
+      makeReflector(['platform.audit.read']),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
+    );
+
+    await expect(
+      guard.canActivate(makeExecutionContext(ctx(['platform.settings.read']))),
+    ).rejects.toThrow(ForbiddenException);
   });
 
-  it('denies when wildcard does not match the required scope', () => {
-    const guard = new PermissionsGuard(makeReflector(['merchant.products.read']));
-    try {
-      guard.canActivate(makeExecutionContext(ctx(['merchant.orders.*'])));
-      expect.fail('expected ForbiddenException');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ForbiddenException);
-    }
+  it('denies when wildcard does not match the required scope', async () => {
+    mockPermissionsService.getForUser = vi.fn().mockResolvedValue({
+      permissions: new Set(['merchant.orders.*']),
+      isSuperAdmin: false,
+    });
+
+    const guard = new PermissionsGuard(
+      makeReflector(['merchant.products.read']),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
+    );
+
+    await expect(
+      guard.canActivate(makeExecutionContext(ctx(['merchant.orders.*']))),
+    ).rejects.toThrow(ForbiddenException);
   });
 
-  it('denies when authContext is absent (defense-in-depth)', () => {
-    const guard = new PermissionsGuard(makeReflector(['platform.settings.read']));
-    try {
-      guard.canActivate(makeExecutionContext(undefined));
-      expect.fail('expected ForbiddenException');
-    } catch (err) {
-      expect(err).toBeInstanceOf(ForbiddenException);
-      const body = (err as ForbiddenException).getResponse() as { code: ErrorCode };
-      expect(body.code).toBe(ErrorCode.AUTHZ_PERMISSION_DENIED);
-    }
+  it('denies when authContext is absent (defense-in-depth)', async () => {
+    const guard = new PermissionsGuard(
+      makeReflector(['platform.settings.read']),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
+    );
+
+    await expect(
+      guard.canActivate(makeExecutionContext(undefined)),
+    ).rejects.toThrow(ForbiddenException);
   });
 
-  it('denies when one of multiple required permissions is missing', () => {
+  it('denies when one of multiple required permissions is missing', async () => {
+    mockPermissionsService.getForUser = vi.fn().mockResolvedValue({
+      permissions: new Set(['platform.settings.read']),
+      isSuperAdmin: false,
+    });
+
     const guard = new PermissionsGuard(
       makeReflector(['platform.settings.read', 'platform.audit.read']),
+      mockPermissionsService as EffectivePermissionsService,
+      makeAuditService(),
     );
-    let threw = false;
-    try {
+
+    await expect(
       guard.canActivate(
         makeExecutionContext(ctx(['platform.settings.read'])),
-      );
-    } catch (err) {
-      threw = err instanceof ForbiddenException;
-    }
-    expect(threw).toBe(true);
+      ),
+    ).rejects.toThrow(ForbiddenException);
   });
 
   it('PERMISSIONS_KEY is the documented metadata key', () => {

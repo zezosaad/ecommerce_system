@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: Inbound Webhooks (Supabase Auth)
+  version: 1.0.0
+  description: |
+    Webhook endpoints consumed by external providers. All requests MUST be
+    signature-verified before any business effect (Constitution §IV).
+    Phase 2 ships only the Supabase Auth event handler.
+
+paths:
+  /api/v1/webhooks/supabase/auth:
+    post:
+      operationId: postSupabaseAuthWebhook
+      summary: Consume Supabase Auth identity events.
+      description: |
+        Handled events (allow-list):
+          - `user.created`         → ensures a placeholder profile exists if
+                                      one was not yet synced.
+          - `user.email_confirmed` → flips `pending_verification` profiles to
+                                      `active` and writes an audit entry
+                                      `auth.profile.activated`.
+          - `user.deleted`         → soft-deletes the matching application
+                                      profile (`status = deleted`,
+                                      `deletedAt = now()`).
+        Idempotent by `(source, eventId)`. Duplicate events are acknowledged
+        with `200` and not re-processed.
+
+        Signature verification: the request body's HMAC-SHA256 with the
+        platform's `SUPABASE_WEBHOOK_SECRET` MUST equal the
+        `X-Supabase-Signature` header. Mismatch → 401, no DB writes, no audit
+        entry beyond a warning-level webhook entry tagged `signature_invalid`.
+      security: [{ SupabaseWebhookSignature: [] }]
+      tags: [Webhooks]
+      x-rate-limit: { bucket: webhook-supabase, scope: per-ip, limit: 10/min }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type, record]
+              properties:
+                id: { type: string, description: "Provider event id" }
+                type: { type: string, enum: [user.created, user.email_confirmed, user.deleted] }
+                record:
+                  type: object
+                  description: Event payload as delivered by Supabase.
+                  required: [id, email]
+                  additionalProperties: true
+                  properties:
+                    id: { type: string, format: uuid, description: "Supabase user id" }
+                    email: { type: string, format: email }
+                    email_confirmed_at: { type: string, format: date-time, nullable: true }
+      responses:
+        '200':
+          description: Event accepted (newly processed or duplicate).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean, enum: [true] }
+                  duplicate: { type: boolean, default: false }
+        '401':
+          description: Signature missing or invalid.
+          content:
+            application/json:
+              schema: { $ref: '_shared.yaml#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '_shared.yaml#/components/responses/UnprocessableEntity' }
+        '429': { $ref: '_shared.yaml#/components/responses/TooManyRequests' }
