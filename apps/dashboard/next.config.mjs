@@ -1,3 +1,9 @@
+if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error(
+    'Refusing to build dashboard: SUPABASE_SERVICE_ROLE_KEY must not be present in frontend build environment.',
+  );
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -9,4 +15,4 @@ const nextConfig = {
   ],
 };
 
-module.exports = nextConfig;
+export default nextConfig;

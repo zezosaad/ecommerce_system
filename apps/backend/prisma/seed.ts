@@ -202,20 +202,29 @@ async function seedSettings() {
     { key: 'platform.cors.origins', value: process.env.CORS_ORIGINS ?? 'http://localhost:3001,http://localhost:3002', isSecret: false, description: { ar: 'أصول CORS المسموح بها', en: 'Allowed CORS origins' } },
   ];
 
+  // Global settings (merchant_id IS NULL) cannot be upserted via the
+  // composite unique because Prisma rejects nullable fields in `where`.
+  // Use find-then-create/update keyed by `key` with a NULL merchant filter.
   for (const setting of settings) {
-    await prisma.setting.upsert({
-      where: {
-        key_merchantId: { key: setting.key, merchantId: null },
-      },
-      update: { value: setting.value },
-      create: {
-        key: setting.key,
-        merchantId: null,
-        value: setting.value,
-        isSecret: setting.isSecret,
-        description: setting.description,
-      },
+    const existing = await prisma.setting.findFirst({
+      where: { key: setting.key, merchantId: null, deletedAt: null },
     });
+    if (existing) {
+      await prisma.setting.update({
+        where: { id: existing.id },
+        data: { value: setting.value },
+      });
+    } else {
+      await prisma.setting.create({
+        data: {
+          key: setting.key,
+          merchantId: null,
+          value: setting.value,
+          isSecret: setting.isSecret,
+          description: setting.description,
+        },
+      });
+    }
   }
   console.log(`  Seeded ${settings.length} settings.`);
 }

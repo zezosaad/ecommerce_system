@@ -33,7 +33,12 @@ export class JwksCacheService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    await this.fetchKeys();
+    await this.fetchKeys().catch((err) => {
+      this.lastFetchSuccess = false;
+      this.logger.warn(
+        `Initial JWKS fetch failed (${(err as Error).message}). Continuing in degraded mode.`,
+      );
+    });
     this.refreshInterval = setInterval(() => {
       this.fetchKeys().catch((err) => {
         this.logger.warn(`Background JWKS refresh failed: ${err.message}`);
@@ -70,7 +75,7 @@ export class JwksCacheService implements OnModuleInit {
     this.fetchInProgress = true;
 
     try {
-      const jwksUrl = `${this.supabaseUrl}/auth/v1/jwks`;
+      const jwksUrl = this.buildJwksUrl();
       const response = await fetch(jwksUrl, {
         signal: AbortSignal.timeout(5000),
       });
@@ -124,7 +129,7 @@ export class JwksCacheService implements OnModuleInit {
 
     try {
       this.fetchInProgress = true;
-      const jwksUrl = `${this.supabaseUrl}/auth/v1/jwks`;
+      const jwksUrl = this.buildJwksUrl();
       const response = await fetch(jwksUrl, {
         signal: AbortSignal.timeout(1000),
       });
@@ -162,5 +167,13 @@ export class JwksCacheService implements OnModuleInit {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
+  }
+
+  private buildJwksUrl(): string {
+    const base = this.supabaseUrl.replace(/\/+$/, '');
+    if (base.endsWith('/auth/v1')) {
+      return `${base}/jwks`;
+    }
+    return `${base}/auth/v1/jwks`;
   }
 }
